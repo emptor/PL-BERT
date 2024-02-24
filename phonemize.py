@@ -1,79 +1,69 @@
 import string
 from text_normalize import normalize_text, remove_accents
 
+import string
+
+# Assuming normalize_text and remove_accents functions are defined elsewhere
+# and are appropriate for Spanish text.
+
 special_mappings = {
-    "a": "ɐ",
-    "'t": 't',
-    "'ve": "v",
-    "'m": "m",
-    "'re": "ɹ",
-    "d": "d",
-    'll': "l",
-    "n't": "nt",
-    "'ll": "l",
-    "'d": "d",
-    "'": "ʔ",
-    "wasn": "wˈɒzən",
-    "hasn": "hˈæzn",
-    "doesn": "dˈʌzən",
+    "que": "ke",
+    "qui": "ki",
+    "gue": "ge",
+    "gui": "gi",
+    "ce": "se",
+    "ci": "si",
+    "ll": "j",  # Latin American Spanish
+    "ñ": "ɲ",
+    "v": "b",  # 'v' and 'b' are pronounced the same in Spanish
+    "z": "s",  # In Latin American Spanish, 'z' is pronounced as 's'
+    "j": "x",
+    "h": "",  # 'h' is silent in Spanish
+    # Additional context-sensitive mappings can be placed here
 }
+
 
 def phonemize(text, global_phonemizer, tokenizer):
     text = normalize_text(remove_accents(text))
     words = tokenizer.tokenize(text)
-    
-    phonemes_bad = [global_phonemizer.phonemize([word], strip=True)[0] if word not in string.punctuation else word for word in words]
+
+    phonemes_bad = [
+        (
+            global_phonemizer.phonemize([word], strip=True)[0]
+            if word not in string.punctuation
+            else word
+        )
+        for word in words
+    ]
     input_ids = []
     phonemes = []
-    
-    for i in range(len(words)):
-        word = words[i]
+
+    for i, word in enumerate(words):
         phoneme = phonemes_bad[i]
-        
+
         for k, v in special_mappings.items():
-            if word == k:
-                phoneme = v
+            if word.startswith(k):  # Adjusted for context-sensitive beginnings
+                phoneme = v + word[len(k) :]
                 break
-        
-        # process special cases (NOT COMPLETE)
-        
-        if word == "'s":
-            if i > 0:
-                if phonemes[i - 1][-1] in ['s', 'ʃ', 'n', ]:
-                    phoneme = "z"
-                else:
-                    phoneme = "s"
-                    
-        if i != len(words) - 1:
-            if words[i+1] == "'t":
-                if word == "haven":
-                    phoneme = "hˈævn"
-                if word == "don":
-                    phoneme = "dˈəʊn"
-        
-        if word == "the": # change the pronunciations before voewls
-            if i < len(words):
-                next_phoneme = phonemes_bad[i + 1].replace('ˈ', '').replace('ˌ', '')
-                if next_phoneme[0] in 'ɪiʊuɔɛeəɜoæʌɑaɐ':
-                    phoneme = "ðɪ"
-                    
-        if word == "&": 
-            if i > 0 and i < len(words):
-                phoneme = "ænd"
-                
-        if word == "A": # capital "a"
-            if i > 0:
-                if words[i - 1] == ".":
-                    phoneme = "ɐ"
-                    
-        if "@" in word and len(word) > 1: # remove "@"
-            if "@" in word and len(word) > 1:
-                phonemes.append(word.replace('@', ''))
-                input_ids.append(tokenizer.encode(word.replace('@', ''))[0])
-                continue
-        
+
+        # Adjustments for context-sensitive pronunciation
+        if word.startswith("g") and len(word) > 1 and word[1] in "ei":
+            phoneme = "x" + phoneme[1:]
+        elif word.startswith("c") and len(word) > 1 and word[1] in "ei":
+            phoneme = "s" + phoneme[1:]
+
+        # Handling aspiration of 's' in specific contexts
+        if "s" in word[:-1]:  # Check if 's' occurs not at the end of the word
+            phoneme = phoneme.replace(
+                "s", "sʰ", 1
+            )  # Aspirate the first occurrence of 's'
+        if word.endswith("s"):
+            phoneme = phoneme[:-1] + "sʰ"  # Aspirate the final 's'
+
         input_ids.append(tokenizer.encode(word)[0])
         phonemes.append(phoneme)
-        
+
     assert len(input_ids) == len(phonemes)
-    return {'input_ids' : input_ids, 'phonemes': phonemes}
+    r = {"input_ids": input_ids, "phonemes": phonemes}
+    # print(r)
+    return r
